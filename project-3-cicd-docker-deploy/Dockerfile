@@ -1,7 +1,12 @@
-FROM node:18-alpine
+FROM node:20-slim
+
 WORKDIR /app
+
 COPY package*.json ./
-RUN npm install --production
-COPY src/ ./src/
-EXPOSE 3000
-CMD ["node", "src/index.js"]
+RUN npm ci --omit=dev
+
+COPY . .
+
+EXPOSE 3003
+
+CMD ["npm", "start"]
