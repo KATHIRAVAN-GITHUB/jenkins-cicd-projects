@@ -1,137 +1,100 @@
 pipeline {
-    agent any
+  agent any
 
-    environment {
-        DOCKER_IMAGE = "yourdockerhubusername/my-app"
-        DOCKER_TAG   = "${BUILD_NUMBER}"
-        DOCKER_CREDENTIALS = 'dockerhub-credentials'
-        EMAIL_TO = "venkatesangunaraj@gmail.com"
+  environment {
+    PROJECT_DIR = "project-3-cicd-docker-deploy"
+    IMAGE_NAME = "venkatesan004/project-3-pipeline-docker-new"
+    IMAGE_TAG = "${BUILD_NUMBER}"
+    CONTAINER_NAME = "project-3-pipeline-docker-new"
+    EMAIL_TO = "venkatesangunaraj@gmail.com"
+    DOCKER_CREDENTIALS = "dockerhub-credentials"
+  }
+
+  stages {
+
+    stage("Build") {
+      steps {
+        dir("${PROJECT_DIR}") {
+          sh '''
+            echo "Build started!"
+            echo "Branch: ${GIT_BRANCH}"
+            echo "Build Number: ${BUILD_NUMBER}"
+            npm install
+          '''
+        }
+      }
     }
 
-    stages {
-
-        stage('Checkout') {
-            steps {
-                echo "📥 Pulling latest code..."
-                checkout scm
-            }
+    stage("Test") {
+      steps {
+        dir("${PROJECT_DIR}") {
+          sh "npm test"
         }
-
-        stage('Install & Test') {
-            agent {
-                docker { image 'node:18-alpine' }
-            }
-            steps {
-                echo "📦 Installing dependencies..."
-                sh 'npm install'
-
-                echo "🧪 Running tests..."
-                sh 'npm test'
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                echo "🐳 Building Docker image..."
-                sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
-                sh "docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest"
-            }
-        }
-
-        stage('Push to Docker Hub') {
-            steps {
-                echo "🚀 Pushing image to Docker Hub..."
-                withCredentials([usernamePassword(
-                    credentialsId: "${DOCKER_CREDENTIALS}",
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
-                    sh "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
-                    sh "docker push ${DOCKER_IMAGE}:latest"
-                }
-            }
-        }
-
-        stage('Deploy') {
-            steps {
-                echo "🌍 Deploying application..."
-
-                sh """
-                    docker stop my-app || true
-                    docker rm my-app || true
-
-                    docker run -d \
-                        --name my-app \
-                        -p 3000:3000 \
-                        --restart unless-stopped \
-                        ${DOCKER_IMAGE}:${DOCKER_TAG}
-                """
-            }
-        }
-
+      }
     }
 
-    post {
-
-        success {
-            echo "✅ Deployment successful! App running at port 3000"
-
-            mail(
-                to: "${EMAIL_TO}",
-                subject: "✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: """\
-Build Success 🎉
-
-Job: ${env.JOB_NAME}
-Build Number: #${env.BUILD_NUMBER}
-Branch: ${env.GIT_BRANCH}
-
-Docker Image: ${DOCKER_IMAGE}:${DOCKER_TAG}
-
-App deployed successfully 🚀
-
-URL: ${env.BUILD_URL}
-"""
-            )
+    stage("Docker Build") {
+      steps {
+        dir("${PROJECT_DIR}") {
+          sh """
+            docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+            docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
+          """
         }
-
-        failure {
-            echo "❌ Pipeline failed. Rolling back..."
-
-            sh """
-                docker stop my-app || true
-                docker rm my-app || true
-
-                docker run -d \
-                    --name my-app \
-                    -p 3000:3000 \
-                    ${DOCKER_IMAGE}:latest || true
-            """
-
-            mail(
-                to: "${EMAIL_TO}",
-                subject: "❌ FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: """\
-Build Failed ❌
-
-Job: ${env.JOB_NAME}
-Build Number: #${env.BUILD_NUMBER}
-Branch: ${env.GIT_BRANCH}
-
-Rolled back to previous stable version ⚠️
-
-Check logs here:
-${env.BUILD_URL}
-"""
-            )
-        }
-
-        always {
-            echo "🧹 Cleaning up..."
-
-            sh "docker logout || true"
-            sh "docker image prune -f || true"
-        }
+      }
     }
+
+    // 🔥 NEW STAGE
+    stage("Push to Docker Hub") {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: "${DOCKER_CREDENTIALS}",
+          usernameVariable: 'DOCKER_USER',
+          passwordVariable: 'DOCKER_PASS'
+        )]) {
+          sh '''
+            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+            docker push ${IMAGE_NAME}:${IMAGE_TAG}
+            docker push ${IMAGE_NAME}:latest
+          '''
+        }
+      }
+    }
+
+    stage("Docker Deploy (Local)") {
+      steps {
+        sh '''
+            # Stop container if running
+            docker stop ${CONTAINER_NAME} || true
+            
+            # Remove container if exists
+            docker rm ${CONTAINER_NAME} || true
+            
+            # Run new container
+            docker run -d \
+              --name ${CONTAINER_NAME} \
+              -p 3003:3003 \
+              ${IMAGE_NAME}:${IMAGE_TAG}
+        '''
+      }
+    }
+  }
+
+  post {
+    success {
+      mail(
+        to: "${EMAIL_TO}",
+        subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: "Project 3 CI/CD succeeded.\nJob: ${env.JOB_NAME}\nBuild: #${env.BUILD_NUMBER}\nURL: ${env.BUILD_URL}"
+      )
+    }
+    failure {
+      mail(
+        to: "${EMAIL_TO}",
+        subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: "Project 3 CI/CD failed.\nJob: ${env.JOB_NAME}\nBuild: #${env.BUILD_NUMBER}\nURL: ${env.BUILD_URL}"
+      )
+    }
+  }
 }
