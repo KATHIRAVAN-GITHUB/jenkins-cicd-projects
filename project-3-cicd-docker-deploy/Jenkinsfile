@@ -7,7 +7,7 @@ pipeline {
     IMAGE_TAG = "${BUILD_NUMBER}"
     CONTAINER_NAME = "project-3-pipeline-docker-new"
     EMAIL_TO = "kathirkabilan007@gmail.com"
-    DOCKER_CREDENTIALS = "DockerHub Credential"
+    DOCKER_CREDENTIALS = "dockerhub-credential"
   }
 
   stages {
