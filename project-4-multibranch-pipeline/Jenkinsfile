@@ -7,7 +7,7 @@ pipeline {
     IMAGE_TAG = "${BUILD_NUMBER}"
     CONTAINER_NAME = "project-4-multibranch-pipeline"
     EMAIL_TO = "kathirkabilan007@gmail.com"
-    DOCKER_CREDENTIALS = "dockerhub-credentials"
+    DOCKER_CREDENTIALS = "dockerhub-credential"
   }
 
   stages {
